@@ -1,0 +1,10 @@
+function [ d_res, z_res, Dz, obj_val ] = my3D_admm_learn(b, kernel_size,...
+    lambda_residual, lambda_prior, ...
+    max_it, tol, ...
+    verbose, init, smooth_init)
+%3D的仿照2D-3D代码写的。后面才是难的
+%首先是声明一些size
+psf_s=kernel_size(1);%256,但是这现在是3D了所以说对于第三维度也需要psf
+psf_s2=kernel_size(2);
+psf_s3=kernel_size(3);
+end
