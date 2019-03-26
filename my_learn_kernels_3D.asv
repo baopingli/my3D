@@ -13,16 +13,7 @@ verbose='all';
 %前面的对于图像的预处理和2D-3D一致
 k = fspecial('gaussian',[13 13],3*1.591); 
 smooth_init = imfilter(b, k, 'same', 'conv', 'symmetric');
-% size(smooth_init);%256 256 24
-% figure();
-% for i=1:size(smooth_init,3)
-%     subplot(121)
-%     imshow(b(:,:,i)),title(sprintf('number of image:%d',i));
-%     subplot(122)
-%     imshow(smooth_init(:,:,i)),title('增加了高斯噪声');
-%     pause(0.5);
-% end
-%所以说可以使用增加了高斯噪声的原数据去进行学习filters然后去重建。
+size(smooth_)
 fprintf('Doing sparse coding kernel learning for k = %d [%d x %d x %d] kernels.\n\n', kernel_size(4), kernel_size(1), kernel_size(2), kernel_size(3))
 
 verbose_admm = 'brief';
