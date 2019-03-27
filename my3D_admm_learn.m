@@ -203,6 +203,8 @@ invdhatTdhat_blocks = zeros(k,k,sx * sy * sw);
 rho=gammas(2)/gammas(1);
 dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); 
 %permute( reshape(d_hat, sx * sy, sw, k), [2,1,3]) rearranges d_hat into dimension sw*k*(sx*sy).
+%应该首先将其转换为元胞然后使用元胞函数进行处理。所以说简单的方法是学会cellfun怎么用，然后在这上面改。
+%将函数应用到所有的元胞上。
 for i=1:sx*sy*sw
     invdhatTdhat_blocks(:,:,i) = pinv(rho * eye(k) + dhatT_blocks(:,i) * dhatT_blocks(:,i)');% inv[dTd_(i)_rho*I]
 end
@@ -229,7 +231,7 @@ return;
 
 
 
-%计算dTd+rho*I,没有使用矩阵逆的引理，直接求的逆。(为什么耗的时间那么长)
+%计算dTd+rho*I,没有使用矩阵逆的引理，直接求的逆。(为什么耗的时间那么长)，可能真的需要特殊处理
 function [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, gammas)
 %就是把三个维度都算进去 如果这里不确定后面问问老师
 sy=size(z_hat,1);sx=size(z_hat,2);sz=size(z_hat,3);k=size(z_hat,4);n=size(z_hat,5);
@@ -238,7 +240,7 @@ rho=gammas(2)/gammas(1);
 %上来就将矩阵进行了reshape处理
 %  permute( reshape(z_hat, sx * sy * sz, k, n), [2,3,1]) rearranges z_hat into dimension k*n*(sx*sy).
 zhatT_blocks=conj(permute(reshape(z_hat,sx*sy*sz,k,n),[2,3,1]));
-for i=1:sx*sy*sz
+for i=1:sx*sy*sz %这个数太大了导致运行的时间很长。（所以说3D代码好像是使用了bsxfun快速计算）
     invzhatTzhat_blocks(:,:,i) = pinv(rho * eye(k) + zhatT_blocks(:,:,i) * zhatT_blocks(:,:,i)');% inv[zTz_(i)+rho*I]
 end
 return;
@@ -264,8 +266,8 @@ function [u_proj] = KernelConstraintProj( u, size_d, psf_radius)
     ndim = length( size_d ) - 1;
 
     %Get support
-    u_proj = circshift( u, [psf_radius, psf_radius, psf_radius, 0] ); 
-    u_proj = u_proj(1:psf_radius*2+1,1:psf_radius*2+1,1:psf_radius*2+1,:);
+    u_proj = circshift( u, [psf_radius(1), psf_radius(2), psf_radius(3), 0] ); 
+    u_proj = u_proj(1:psf_radius(1)*2+1,1:psf_radius(2)*2+1,1:psf_radius(3)*2+1,:);
     
      %Normalize
     for ik = 1:k
@@ -278,8 +280,10 @@ function [u_proj] = KernelConstraintProj( u, size_d, psf_radius)
     end
     
     %Now shift back and pad again
-    u_proj = padarray( u_proj, [size_d(1:end - 1) - (2*psf_radius+1), 0], 0, 'post');
-    u_proj = circshift(u_proj, -[repmat(psf_radius, 1, ndim), 0]);
+    %u_proj = padarray( u_proj, [size_d(1:end - 1) - (2*psf_radius+1), 0], 0, 'post');
+    u_proj = padarray( u_proj, [size_d(1)-(2*psf_radius(1)+1),size_d(2)-(2*psf_radius(2)+1),size_d(3)-(2*psf_radius(3)+1), 0], 0, 'post');
+    %u_proj = circshift(u_proj, -[repmat(psf_radius, 1, ndim), 0]);
+    u_proj = circshift(u_proj, -[psf_radius(1), psf_radius(2), psf_radius(3), 0] );
     
 return;
 
