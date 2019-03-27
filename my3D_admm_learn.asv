@@ -95,7 +95,8 @@ for i=1:max_it
     d_old = d;
     d_hat_old = d_hat;
     z_hat = fft2(z);
-    [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, gammas_D);
+    %[zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, gammas_D);
+    [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat,size_z,gammas_D);
     for i_d=1:max_it_d
         %v_D是中间变量vD1是dz
         %首先需要知道z_hat和d_hat的大小，
@@ -190,6 +191,8 @@ rho=gammas(2)/gammas(1);
 for i=1:sx*sy*sz
     z_hat(:,:,i)=invdhatTdhat_blocks(:,:,i) * ( dhatT_blocks(:,i) * x1_blocks(:,i) + rho * x2_blocks(:,:,i) );
 end
+%这里少了一句话
+z_hat = reshape(permute(z_hat, [3,1,2]), size_z);%这样应该是对了
 
 return;
 
@@ -200,13 +203,14 @@ function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gamma
 sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
 invdhatTdhat_blocks = zeros(k,k,sx * sy * sw);
 rho=gammas(2)/gammas(1);
-dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); 
+dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); %size应该是ss,10
 %permute( reshape(d_hat, sx * sy, sw, k), [2,1,3]) rearranges d_hat into dimension sw*k*(sx*sy).
 %应该首先将其转换为元胞然后使用元胞函数进行处理。所以说简单的方法是学会cellfun怎么用，然后在这上面改。
 %将函数应用到所有的元胞上。
 for i=1:sx*sy*sw
     invdhatTdhat_blocks(:,:,i) = pinv(rho * eye(k) + dhatT_blocks(:,i) * dhatT_blocks(:,i)');% inv[dTd_(i)_rho*I]
 end
+
     
 return;
 
@@ -230,19 +234,46 @@ return;
 
 
 
-%计算dTd+rho*I,没有使用矩阵逆的引理，直接求的逆。(为什么耗的时间那么长)，可能真的需要特殊处理
-function [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, gammas)
-%就是把三个维度都算进去 如果这里不确定后面问问老师
-sy=size(z_hat,1);sx=size(z_hat,2);sz=size(z_hat,3);k=size(z_hat,4);n=size(z_hat,5);
-invzhatTzhat_blocks = zeros(k,k,sx * sy * sz);
+% %计算dTd+rho*I,没有使用矩阵逆的引理，直接求的逆。(为什么耗的时间那么长)，可能真的需要特殊处理
+% function [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, gammas)
+% %就是把三个维度都算进去 如果这里不确定后面问问老师
+% sy=size(z_hat,1);sx=size(z_hat,2);sz=size(z_hat,3);k=size(z_hat,4);n=size(z_hat,5);
+% invzhatTzhat_blocks = zeros(k,k,sx * sy * sz);
+% rho=gammas(2)/gammas(1);
+% %上来就将矩阵进行了reshape处理
+% %  permute( reshape(z_hat, sx * sy * sz, k, n), [2,3,1]) rearranges z_hat into dimension k*n*(sx*sy).
+% zhatT_blocks=conj(permute(reshape(z_hat,sx*sy*sz,k,n),[2,3,1]));
+% for i=1:sx*sy*sz %这个数太大了导致运行的时间很长。（所以说3D代码好像是使用了bsxfun快速计算）
+%     invzhatTzhat_blocks(:,:,i) = pinv(rho * eye(k) + zhatT_blocks(:,:,i) * zhatT_blocks(:,:,i)');% inv[zTz_(i)+rho*I]
+% end
+% return;
+
+%这里看使用3D的cellfun看能快多少。
+function [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, size_z, gammas)
+% Computes the spectra for the inversion of all H_i
+%size zup为 x,y,z,k,examples
+%size_z为x,y,z    后面 k n
+%Params
+n = size_z(end);%2
+k = size_z(end - 1);%10
+ndim = length( size_z ) - 2;%3
+ss = prod(size_z(1:ndim));%sx*sy*sz
 rho=gammas(2)/gammas(1);
-%上来就将矩阵进行了reshape处理
-%  permute( reshape(z_hat, sx * sy * sz, k, n), [2,3,1]) rearranges z_hat into dimension k*n*(sx*sy).
-zhatT_blocks=conj(permute(reshape(z_hat,sx*sy*sz,k,n),[2,3,1]));
-for i=1:sx*sy*sz %这个数太大了导致运行的时间很长。（所以说3D代码好像是使用了bsxfun快速计算）
-    invzhatTzhat_blocks(:,:,i) = pinv(rho * eye(k) + zhatT_blocks(:,:,i) * zhatT_blocks(:,:,i)');% inv[zTz_(i)+rho*I]
-end
+%Precompute spectra for H 然后就计算
+zhatT_blocks = reshape( num2cell( permute( reshape(z_hat, [ss, k, n] ), [3,2,1] ), [1 2] ), [1 ss]); %n * k * s 先将前面的部分转换成元胞然后在reshape为1 ss的形式
+
+%Precompute the inverse matrices for each frequency
+invzhatTzhat_blocks = reshape( cellfun(@(A)(1/rho * eye(k) - 1/rho * A'*pinv(rho * eye(n) + A * A')*A), zhatT_blocks, 'UniformOutput', false'), [1 ss]); 
+%reshape成1 ss的形式了 1x所有像素 的形式
+xx=cell2mat(zhatT_blocks);
+xx=reshape(xx,n,k,ss);
+zhatT_blocks=permute(xx,[2,1,3]);%变成k n ss的形式
+yy=cell2mat(invzhatTzhat_blocks);
+yy=reshape(yy,k,k,ss);
+invzhatTzhat_blocks=yy;
+
 return;
+
 
 
 % function [u_proj]=KernelConstraintProj( u, size_k_full, psf_radius)
