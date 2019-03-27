@@ -105,7 +105,7 @@ for i=1:max_it
         % z_hat : (x,y,filters,examples)  ,  permute(z_hat, [1 2 5 3 4]) : (x,y,spectral(1),filters,,examples).
         v_D{2}=d;
         u_D{1} = ProxDataMasked( v_D{1} - d_D{1}, lambda(1)/gammas_D(1) );
-        u_D{2} = ProxKernelConstraint( v_D{2} - d_D{2});
+        u_D{2} = ProxKernelConstraint( v_D{2} - d_D{2});%这个只有一个就是在D更新的时候
         for c=1:2
             d_D{c} = d_D{c} - (v_D{c} - u_D{c});
             xi_D{c} = u_D{c} + d_D{c};
@@ -229,7 +229,7 @@ return;
 
 
 
-%计算dTd+rho*I,没有使用矩阵逆的引理，直接求的逆。
+%计算dTd+rho*I,没有使用矩阵逆的引理，直接求的逆。(为什么耗的时间那么长)
 function [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, gammas)
 %就是把三个维度都算进去 如果这里不确定后面问问老师
 sy=size(z_hat,1);sx=size(z_hat,2);sz=size(z_hat,3);k=size(z_hat,4);n=size(z_hat,5);
@@ -244,20 +244,44 @@ end
 return;
 
 
-function [u_proj]=KernelConstraintProj( u, size_k_full, psf_radius)
-%Get support
-u_proj = circshift( u, [psf_radius(1), psf_radius(2), psf_radius(3), 0] );
-u_proj = u_proj(1:psf_radius(1)*2+1, 1:psf_radius(2)*2+1, 1:psf_radius(3)*2+1, :, :);
+% function [u_proj]=KernelConstraintProj( u, size_k_full, psf_radius)
+% %Get support
+% u_proj = circshift( u, [psf_radius(1), psf_radius(2), psf_radius(3), 0] );
+% u_proj = u_proj(1:psf_radius(1)*2+1, 1:psf_radius(2)*2+1, 1:psf_radius(3)*2+1,:);
+% 
+% %Normalize
+% u_norm = repmat( sum(sum(u_proj.^2, 1),2), [size(u_proj,1), size(u_proj,2), size(u_proj,3), 1] );
+% %扩充到三个维度的大小，将sum的值，应该是这样对应到三个维度里面去实现。
+% u_proj( u_norm >= 1 ) = u_proj( u_norm >= 1 ) ./ sqrt(u_norm( u_norm >= 1 ));
+% %Now shift back and pad again 变回原状
+% u_proj = padarray( u_proj, (size_k_full - size(u_proj)), 0, 'post');
+% u_proj = circshift(u_proj, -[psf_radius(1), psf_radius(2), psf_radius(3), 0] );
+% return;
+function [u_proj] = KernelConstraintProj( u, size_d, psf_radius)
 
-%Normalize
-u_norm = repmat( sum(sum(u_proj.^2, 1),2), [size(u_proj,1), size(u_proj,2), size(u_proj,3), 1] );
-%扩充到三个维度的大小，将sum的值，应该是这样对应到三个维度里面去实现。
-u_proj( u_norm >= 1 ) = u_proj( u_norm >= 1 ) ./ sqrt(u_norm( u_norm >= 1 ));
-%Now shift back and pad again 变回原状
-u_proj = padarray( u_proj, (size_k_full - size(u_proj)), 0, 'post');
-u_proj = circshift(u_proj, -[psf_radius(1), psf_radius(2), psf_radius(3), 0] );
+    %Params
+    k = size_d(end);
+    ndim = length( size_d ) - 1;
+
+    %Get support
+    u_proj = circshift( u, [psf_radius, psf_radius, psf_radius, 0] ); 
+    u_proj = u_proj(1:psf_radius*2+1,1:psf_radius*2+1,1:psf_radius*2+1,:);
+    
+     %Normalize
+    for ik = 1:k
+        u_curr = eval(['u_proj(' repmat(':,',1,ndim), sprintf('%d',ik), ')']);
+        u_norm = sum(reshape(u_curr.^2 ,[],1));
+        if u_norm >= 1
+            u_curr = u_curr ./ sqrt(u_norm);
+        end
+        eval(['u_proj(' repmat(':,',1,ndim), sprintf('%d',ik), ') = u_curr;']);
+    end
+    
+    %Now shift back and pad again
+    u_proj = padarray( u_proj, [size_d(1:end - 1) - (2*psf_radius+1), 0], 0, 'post');
+    u_proj = circshift(u_proj, -[repmat(psf_radius, 1, ndim), 0]);
+    
 return;
-
 
 
 function [M, Mtb] = precompute_MProx(b, psf_radius,smoothinit)

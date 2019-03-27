@@ -90,7 +90,7 @@ max_it_z = 10;
 obj_val_filter = obj_val;
 obj_val_z = obj_val;
 for i=1:max_it
-    rho=gammas_D(2)/gamma_D(1);
+    rho=gammas_D(2)/gammas_D(1);
     obj_val_min = min(obj_val_filter, obj_val_z);
     d_old = d;
     d_hat_old = d_hat;
@@ -105,7 +105,7 @@ for i=1:max_it
         % z_hat : (x,y,filters,examples)  ,  permute(z_hat, [1 2 5 3 4]) : (x,y,spectral(1),filters,,examples).
         v_D{2}=d;
         u_D{1} = ProxDataMasked( v_D{1} - d_D{1}, lambda(1)/gammas_D(1) );
-        u_D{2} = ProxKernelConstraint( v_D{2} - d_D{2});
+        u_D{2} = ProxKernelConstraint( v_D{2} - d_D{2});%这个只有一个就是在D更新的时候
         for c=1:2
             d_D{c} = d_D{c} - (v_D{c} - u_D{c});
             xi_D{c} = u_D{c} + d_D{c};
@@ -167,12 +167,12 @@ end
 %Final estimate
 z_res = z;
 
-d_res = circshift( d, [psf_radius, psf_radius, 0, 0] );
-d_res = d_res(1:psf_radius*2+1, 1:psf_radius*2+1, :, :);
+d_res = circshift( d, [psf_radius(1), psf_radius(2), psf_radius(3), 0] );
+d_res = d_res(1:psf_radius(1)*2+1, 1:psf_radius(2)*2+1, 1:psf_radius(3)*2+1, :);
 
 z_hat = reshape(fft2(z), size_zhat);
-Dz = real(ifft2(squeeze(sum(bsxfun(@times, d_hat, permute(z_hat, [1 2 5 3 4])), 4)))) + smoothinit;% Dz
-%
+%Dz = real(ifft2(squeeze(sum(bsxfun(@times, d_hat, permute(z_hat, [1 2 5 3 4])), 4)))) + smoothinit;% Dz
+Dz = real(ifft2(squeeze(sum(bsxfun(@times, d_hat, z_hat), 4)))) + smoothinit;
 
 return;
 
@@ -247,7 +247,7 @@ return;
 function [u_proj]=KernelConstraintProj( u, size_k_full, psf_radius)
 %Get support
 u_proj = circshift( u, [psf_radius(1), psf_radius(2), psf_radius(3), 0] );
-u_proj = u_proj(1:psf_radius(1)*2+1, 1:psf_radius(2)*2+1, 1:psf_radius(3)*2+1, :, :);
+u_proj = u_proj(1:psf_radius(1)*2+1, 1:psf_radius(2)*2+1, 1:psf_radius(3)*2+1,);
 
 %Normalize
 u_norm = repmat( sum(sum(u_proj.^2, 1),2), [size(u_proj,1), size(u_proj,2), size(u_proj,3), 1] );
