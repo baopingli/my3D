@@ -147,7 +147,7 @@ for i=1:max_it
         end
         z_hat=mysolve_conv_term_Z(dhatT_blocks, invdhatTdhat_blocks, xi_Z_hat, gammas_Z, size_z, kernel_size(3));
         z=real(ifft2(z_hat));
-        obj_val = objective(z, d_hat);
+        obj_val = objective(z, d_hat);%这里有错，非单一维度要相互匹配
         if strcmp(verbose, 'brief') || strcmp( verbose, 'all')
             fprintf('--> Obj %5.5g \n', obj_val )
         end
@@ -192,7 +192,6 @@ for i=1:sx*sy*sz
 end
 
 return;
-
 
 
 
@@ -280,7 +279,8 @@ function [u_proj] = KernelConstraintProj( u, size_d, psf_radius)
     end
     
     %Now shift back and pad again
-    u_proj = padarray( u_proj, [size_d(1:end - 1) - (2*psf_radius+1), 0], 0, 'post');
+    %u_proj = padarray( u_proj, [size_d(1:end - 1) - (2*psf_radius+1), 0], 0, 'post');
+    u_proj = padarray( u_proj, [size_d(1)-(2*psf_radius(1)+1),size_d(2)-(2*psf_radius(2)+1),size_d(3)-(2*psf_radius(3)+1), 0], 0, 'post');
     %u_proj = circshift(u_proj, -[repmat(psf_radius, 1, ndim), 0]);
     u_proj = circshift(u_proj, -[psf_radius(1), psf_radius(2), psf_radius(3), 0] );
     

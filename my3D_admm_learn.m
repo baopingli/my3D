@@ -147,7 +147,7 @@ for i=1:max_it
         end
         z_hat=mysolve_conv_term_Z(dhatT_blocks, invdhatTdhat_blocks, xi_Z_hat, gammas_Z, size_z, kernel_size(3));
         z=real(ifft2(z_hat));
-        obj_val = objective(z, d_hat);
+        obj_val = objective(z, d_hat);%这里有错，非单一维度要相互匹配
         if strcmp(verbose, 'brief') || strcmp( verbose, 'all')
             fprintf('--> Obj %5.5g \n', obj_val )
         end
@@ -190,9 +190,10 @@ rho=gammas(2)/gammas(1);
 for i=1:sx*sy*sz
     z_hat(:,:,i)=invdhatTdhat_blocks(:,:,i) * ( dhatT_blocks(:,i) * x1_blocks(:,i) + rho * x2_blocks(:,:,i) );
 end
+%这里少了一句话
+z_hat = reshape(permute(z_hat, [3,1,2]), size_z);%这样应该是对了
 
 return;
-
 
 
 
