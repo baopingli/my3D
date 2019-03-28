@@ -197,21 +197,35 @@ z_hat = reshape(permute(z_hat, [3,1,2]), size_z);%这样应该是对了
 return;
 
 
-
+%如果要改这个代码的话，还是按照下面的求d更新的时候求矩阵逆来算一下。（应该是可以的）首先需要搞清楚invdhatTdhat_blocks的格式是什么样的。
+% function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gammas)
+% 
+% sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
+% invdhatTdhat_blocks = zeros(k,k,sx * sy * sw);%这是初始值设置的时候是根据原来的重写的所以大小应该是kxkxss
+% rho=gammas(2)/gammas(1);
+% dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); %size应该是ss,10
+% %permute( reshape(d_hat, sx * sy, sw, k), [2,1,3]) rearranges d_hat into dimension sw*k*(sx*sy).
+% %应该首先将其转换为元胞然后使用元胞函数进行处理。所以说简单的方法是学会cellfun怎么用，然后在这上面改。
+% %将函数应用到所有的元胞上。
+% for i=1:sx*sy*sw
+%     invdhatTdhat_blocks(:,:,i) = pinv(rho * eye(k) + dhatT_blocks(:,i) * dhatT_blocks(:,i)');% inv[dTd_(i)_rho*I]
+% end
+%     
+% return;
+%使用3D的矩阵逆引理重写计算(DTD+rhoI)-1的求法
+%根据程序中的设置可以得出z是1xk，z'是kx1的。
 function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gammas)
-
 sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
-invdhatTdhat_blocks = zeros(k,k,sx * sy * sw);
+ss=sy*sx*sw;
 rho=gammas(2)/gammas(1);
-dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); %size应该是ss,10
-%permute( reshape(d_hat, sx * sy, sw, k), [2,1,3]) rearranges d_hat into dimension sw*k*(sx*sy).
-%应该首先将其转换为元胞然后使用元胞函数进行处理。所以说简单的方法是学会cellfun怎么用，然后在这上面改。
-%将函数应用到所有的元胞上。
-for i=1:sx*sy*sw
-    invdhatTdhat_blocks(:,:,i) = pinv(rho * eye(k) + dhatT_blocks(:,i) * dhatT_blocks(:,i)');% inv[dTd_(i)_rho*I]
-end
+dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); 
+dhat_blocks= reshape(num2cell(permute( reshape(d_hat, sx * sy * sw, k), [2,1]),[1 2]),[1 ss]);
+invdhatTdhat_blocks= reshape(cellfun(@(A)(1/rho * eye(k) - 1/rho * A'*pinv(rho * eye(1) + A * A')*A),[1 ss]),dhat_blocks , 'UniformOutput', false');
+%将cell还原成mat
+xx=cell2mat(invdhatTdhat_blocks);
+xx=reshape(xx,k,k,ss);
+invdhatTdhat_blocks=xx;
 
-    
 return;
 
 %使用3D代码的跑一下,这里好像还不行，这里仅仅是计算了DTD
@@ -228,7 +242,8 @@ return;
 % dhatTdhat_flat = sum(conj(dhat_flat).*dhat_flat,2);%ss,(1)
 % size(dhatTdhat_flat)
 % return;
-
+%（也就是说如果前面使用的是矩阵逆引理那么这里的关于 z_hat 的那个是没有转置的，所以要在后面计算的时候需要进行转置。不知道速度怎么样
+%但是我也可以在前面进行了专制之后再返回回来）
 function d_hat = mysolve_conv_term_D(zhatT_blocks, invzhatTzhat_blocks, xi_hat, gammas, size_d, n)
 
 sy=size_d(1);sx=size_d(2);
@@ -263,7 +278,7 @@ return;
 % end
 % return;
 
-%这里看使用3D的cellfun看能快多少。
+%这里看使用3D的cellfun看能快多少。(我发现3D代码中的计算的好像不是那个东西)所以说还是将原来的那个改为cellfun的最好，要不然是不对的
 function [zhatT_blocks, invzhatTzhat_blocks] = myprecompute_Z_hat_d(z_hat, size_z, gammas)
 % Computes the spectra for the inversion of all H_i
 %size zup为 x,y,z,k,examples
@@ -283,6 +298,9 @@ invzhatTzhat_blocks = reshape( cellfun(@(A)(1/rho * eye(k) - 1/rho * A'*pinv(rho
 xx=cell2mat(zhatT_blocks);
 xx=reshape(xx,n,k,ss);
 zhatT_blocks=permute(xx,[2,1,3]);%变成k n ss的形式
+%这里的转置要加上。
+zhatT_blocks=conj(zhatT_blocks);
+%--------------------
 yy=cell2mat(invzhatTzhat_blocks);
 yy=reshape(yy,k,k,ss);
 invzhatTzhat_blocks=yy;
