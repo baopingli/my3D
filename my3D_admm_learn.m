@@ -218,9 +218,10 @@ function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gamma
 sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
 ss=sy*sx*sw;
 rho=gammas(2)/gammas(1);
+ni=1;
 dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); 
-dhat_blocks= reshape(num2cell(permute( reshape(d_hat, sx * sy * sw, k), [2,1]),[1 2]),[1 ss]);
-invdhatTdhat_blocks= reshape(cellfun(@(A)(1/rho * eye(k) - 1/rho * A'*pinv(rho * eye(1) + A * A')*A),[1 ss]),dhat_blocks , 'UniformOutput', false');
+dhat_blocks= reshape(num2cell(permute( reshape(d_hat, sx * sy * sw, k), [2,1]),1),[1 ss]);
+invdhatTdhat_blocks= reshape(cellfun(@(A)(1/rho * eye(k) - 1/rho * A'*pinv(rho * eye(ni) + A * A')*A),[1 ss]),dhat_blocks , 'UniformOutput', false');
 %将cell还原成mat
 xx=cell2mat(invdhatTdhat_blocks);
 xx=reshape(xx,k,k,ss);
@@ -366,7 +367,7 @@ function f_val = objectiveFunction( z, d_hat, b, lambda_residual, lambda, psf_ra
     % 266 266 26 20 1
     z_hat=fft2(z);
     %这个还需要看一下d_hat是什么格式 d_hat的 大小为 266 266 26 20，这样算的话应该没有问题不会出错
-    Dz=real(ifft2(squeeze(sum(bsxfun(@times,d_hat,z_hat),4)) ))+smoothinit;
+    Dz=real(ifft2(squeeze(sum(bsxfun(@times,d_hat,z_hat),4)) ))+smoothinit;%这个是加上噪声的
     %这个计算的是沿第四个维度的总和，这样应该可以，因为有filters那一维度
     f_z = lambda_residual * 1/2 * norm( reshape( Dz(1 + psf_radius(1):end - psf_radius(1), ...
     1 + psf_radius(2):end - psf_radius(2),1 + psf_radius(3):end - psf_radius(3),:) - b, [], 1) , 2 )^2;
