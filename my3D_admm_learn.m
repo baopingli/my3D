@@ -164,16 +164,21 @@ for i=1:max_it
     if norm(z_diff(:),2)/ norm(z_comp(:),2) < tol && norm(d_diff(:),2)/ norm(d_comp(:),2) < tol
         break;
     end
+    
+    
+    %----- 每一次的结果都存一下
+    %Final estimate
+    z_res = z;
+    d_res = circshift( d, [psf_radius(1), psf_radius(2), psf_radius(3), 0] );
+    d_res = d_res(1:psf_radius(1)*2+1, 1:psf_radius(2)*2+1, 1:psf_radius(3)*2+1, :);
+    z_hat = reshape(fft2(z), size_zhat);
+    %Dz = real(ifft2(squeeze(sum(bsxfun(@times, d_hat, permute(z_hat, [1 2 5 3 4])), 4)))) + smoothinit;% Dz
+    Dz = real(ifft2(squeeze(sum(bsxfun(@times, d_hat, z_hat), 4)))) + smoothinit;
+    save ./data_Dz.mat Dz;
+    save ./data_d.mat d_res;
+    %-----
 end
-%Final estimate
-z_res = z;
 
-d_res = circshift( d, [psf_radius(1), psf_radius(2), psf_radius(3), 0] );
-d_res = d_res(1:psf_radius(1)*2+1, 1:psf_radius(2)*2+1, 1:psf_radius(3)*2+1, :);
-
-z_hat = reshape(fft2(z), size_zhat);
-%Dz = real(ifft2(squeeze(sum(bsxfun(@times, d_hat, permute(z_hat, [1 2 5 3 4])), 4)))) + smoothinit;% Dz
-Dz = real(ifft2(squeeze(sum(bsxfun(@times, d_hat, z_hat), 4)))) + smoothinit;
 
 return;
 
@@ -198,36 +203,36 @@ return;
 
 
 %如果要改这个代码的话，还是按照下面的求d更新的时候求矩阵逆来算一下。（应该是可以的）首先需要搞清楚invdhatTdhat_blocks的格式是什么样的。
-% function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gammas)
-% 
-% sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
-% invdhatTdhat_blocks = zeros(k,k,sx * sy * sw);%这是初始值设置的时候是根据原来的重写的所以大小应该是kxkxss
-% rho=gammas(2)/gammas(1);
-% dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); %size应该是ss,10
-% %permute( reshape(d_hat, sx * sy, sw, k), [2,1,3]) rearranges d_hat into dimension sw*k*(sx*sy).
-% %应该首先将其转换为元胞然后使用元胞函数进行处理。所以说简单的方法是学会cellfun怎么用，然后在这上面改。
-% %将函数应用到所有的元胞上。
-% for i=1:sx*sy*sw
-%     invdhatTdhat_blocks(:,:,i) = pinv(rho * eye(k) + dhatT_blocks(:,i) * dhatT_blocks(:,i)');% inv[dTd_(i)_rho*I]
-% end
-%     
-% return;
+function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gammas)
+
+sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
+invdhatTdhat_blocks = zeros(k,k,sx * sy * sw);%这是初始值设置的时候是根据原来的重写的所以大小应该是kxkxss
+rho=gammas(2)/gammas(1);
+dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); %size应该是ss,10
+%permute( reshape(d_hat, sx * sy, sw, k), [2,1,3]) rearranges d_hat into dimension sw*k*(sx*sy).
+%应该首先将其转换为元胞然后使用元胞函数进行处理。所以说简单的方法是学会cellfun怎么用，然后在这上面改。
+%将函数应用到所有的元胞上。
+for i=1:sx*sy*sw
+    invdhatTdhat_blocks(:,:,i) = pinv(rho * eye(k) + dhatT_blocks(:,i) * dhatT_blocks(:,i)');% inv[dTd_(i)_rho*I]
+end
+    
+return;
 %使用3D的矩阵逆引理重写计算(DTD+rhoI)-1的求法
 %根据程序中的设置可以得出z是1xk，z'是kx1的。
-function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gammas)
-sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
-ss=sy*sx*sw;
-rho=gammas(2)/gammas(1);
-ni=1;
-dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); 
-dhat_blocks= reshape(num2cell(permute( reshape(d_hat, sx * sy * sw, k), [2,1]),1),[1 ss]);
-invdhatTdhat_blocks= reshape(cellfun(@(A)(1/rho * eye(k) - 1/rho * A'*pinv(rho * eye(ni) + A * A')*A),[1 ss]),dhat_blocks , 'UniformOutput', false');
-%将cell还原成mat
-xx=cell2mat(invdhatTdhat_blocks);
-xx=reshape(xx,k,k,ss);
-invdhatTdhat_blocks=xx;
-
-return;
+% function [dhatT_blocks, invdhatTdhat_blocks] = myprecompute_H_hat_Z(d_hat, gammas)
+% sy=size(d_hat,1);sx=size(d_hat,2);sw=size(d_hat,3);k=size(d_hat,4);
+% ss=sy*sx*sw;
+% rho=gammas(2)/gammas(1);
+% ni=1;
+% dhatT_blocks = conj( permute( reshape(d_hat, sx * sy * sw, k), [2,1]) ); 
+% dhat_blocks= reshape(num2cell(permute( reshape(d_hat, sx * sy * sw, k), [2,1]),1),[1 ss]);
+% invdhatTdhat_blocks= reshape(cellfun(@(A)(1/rho * eye(k) - 1/rho * A'*pinv(rho * eye(ni) + A * A')*A),[1 ss]),dhat_blocks , 'UniformOutput', false');
+% %将cell还原成mat
+% xx=cell2mat(invdhatTdhat_blocks);
+% xx=reshape(xx,k,k,ss);
+% invdhatTdhat_blocks=xx;
+% 
+% return;
 
 %使用3D代码的跑一下,这里好像还不行，这里仅仅是计算了DTD
 % function [dhat_flat, dhatTdhat_flat] = myprecompute_H_hat_Z(dhat, size_x,gammas)
